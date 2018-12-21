@@ -1,0 +1,7 @@
+[package]
+name = "cbv"
+version = "0.1.0"
+authors = ["Aaron Di Silvestro <aaron@bkrn.org>"]
+edition = "2018"
+
+[dependencies]
