@@ -109,7 +109,7 @@ fn main() -> io::Result<()> {
 static NULL_STACK_ERR: &'static str = "Attempted operation on unallocated stack";
 
 fn insert_stack(stacks: &mut HashMap<u32, Vec<u32>>, stack: Vec<u32>) -> u32 {
-    let mut key = 0;
+    let mut key = 1;
     while stacks.contains_key(&key) {
         key = key + 1; 
     }
@@ -154,7 +154,6 @@ fn operate(mut finger: usize, mut reg: [u32; 8], mut stacks: Stacks, instruction
 
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
     #[test]
