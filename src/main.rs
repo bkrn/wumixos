@@ -1,7 +1,8 @@
-
 use std::collections::HashMap;
-use std::io::{self, Read};
+use std::io::{self, Read, BufRead, BufReader, Write};
 use std::process::exit;
+use std::{thread, time};
+use std::fs::{File};
 
 type Stacks = HashMap<u32, Vec<u32>>;
 
@@ -11,7 +12,6 @@ struct Pointers {
     b: usize,
     c: usize,
 }
-
 
 impl Pointers {
     fn new(i: u32) -> Self {
@@ -33,7 +33,7 @@ impl OrthoPointers {
     fn new(i: u32) -> Self {
         OrthoPointers {
             a: ((i >> 25) & 7) as usize,
-            value: ((i << 7) >> 7),
+            value: i & 0x1FF_FFFF,
         }
     }
 }
@@ -53,10 +53,43 @@ enum Instruction {
     Out(Pointers),
     In(Pointers),
     Load(Pointers),
-    Ortho(OrthoPointers)
+    Ortho(OrthoPointers),
 }
 
 use self::Instruction::*;
+
+struct Machine {
+    fin: usize,
+    reg: [u32; 8],
+    stacks: Stacks,
+    buffer: Vec<u8>,
+    session: Vec<u8>,
+}
+
+impl Machine {
+    fn advance(&mut self) -> Instruction {
+        let instruction = self.instruction();
+        self.fin = self.fin + 1;
+        instruction
+    }
+
+    fn instruction(&self) -> Instruction {
+        self.stacks
+            .get(&0)
+            .map(|scroll| scroll[self.fin])
+            .expect("Finger or stack invalid")
+            .into()
+    }
+
+    fn insert_stack(&mut self, stack: Vec<u32>) -> u32 {
+        let mut key = 1;
+        while self.stacks.contains_key(&key) {
+            key = key + 1;
+        }
+        self.stacks.insert(key, stack);
+        key
+    }
+}
 
 impl From<u32> for Instruction {
     fn from(i: u32) -> Self {
@@ -75,82 +108,142 @@ impl From<u32> for Instruction {
             11 => Instruction::In(Pointers::new(i)),
             12 => Instruction::Load(Pointers::new(i)),
             13 => Instruction::Ortho(OrthoPointers::new(i)),
-            _ => panic!("Bad Instruction")
+            _ => panic!("Bad Instruction"),
         }
     }
 }
 
 fn as_u32(word: [u8; 4]) -> u32 {
-    word.iter().enumerate().map(|(i, b)| (*b as u32) << ((3-i)*8)).sum()
+    word.iter()
+        .enumerate()
+        .map(|(i, b)| (*b as u32) << ((3 - i) * 8))
+        .sum()
 }
 
-fn main() -> io::Result<()> {
-
-    let mut registers: [u32; 8] = [0; 8];
+fn get_scroll() -> Vec<u32> {
     let mut scroll: Vec<u32> = Vec::new();
-    let mut stacks: HashMap<u32, Vec<u32>> = HashMap::new();
-    let mut finger: usize = 0;
-
-    let stdin = io::stdin();
-    let mut stdin = stdin.lock();
+    let mut stdin = io::stdin();
     let mut word: [u8; 4] = [0; 4];
     while let Ok(_) = stdin.read_exact(&mut word) {
         scroll.push(as_u32(word));
+    }
+    scroll
+}
+
+fn main() {
+    let mut stacks: HashMap<u32, Vec<u32>> = HashMap::new();
+    stacks.insert(0, get_scroll());
+    let mut machine = Machine {
+        fin: 0,
+        reg: [0; 8],
+        stacks: stacks,
+        buffer: Vec::new(),
+        session: Vec::new(),
     };
-    stacks.insert(0, scroll);
     loop {
-        let t = cycle(finger, registers, stacks);
-        finger = t.0;
-        registers = t.1;
-        stacks = t.2;
+        machine = spin(machine);
     }
 }
 
 static NULL_STACK_ERR: &'static str = "Attempted operation on unallocated stack";
 
-fn insert_stack(stacks: &mut HashMap<u32, Vec<u32>>, stack: Vec<u32>) -> u32 {
-    let mut key = 1;
-    while stacks.contains_key(&key) {
-        key = key + 1; 
+type Tty = BufReader<File>;
+
+fn open_tty() -> Tty {
+    let f = File::open("/dev/tty")
+        .expect("Could Not Open TTY");
+    BufReader::new(f)
+}
+
+fn read_byte(machine: &mut Machine) -> u32 {
+    if machine.buffer.len() == 0 {
+        open_tty().read_until(10, &mut machine.buffer);
+        machine.buffer.reverse();
     }
-    stacks.insert(key, stack);
-    key
+    machine.buffer.pop().expect("No input read") as u32
 }
 
-fn cycle(mut finger: usize, mut reg: [u32; 8], mut stacks: Stacks) -> (usize, [u32; 8], Stacks) {
-    let instruction: Instruction = stacks.get(&0)
-        .and_then(|scroll| scroll.get(finger).cloned())
-        .map(|v| v.into())
-        .expect("Finger or stack invalid");
-    finger = finger + 1;
-    operate(finger, reg, stacks, instruction)
-}
+fn spin(mut machine: Machine) -> Machine {
+    match machine.advance() {
+        Move(Pointers { a, b, c }) => {
+            machine.reg[a] = if machine.reg[c] > 0 {
+                machine.reg[b]
+            } else {
+                machine.reg[a]
+            }
+        }
+        Index(Pointers { a, b, c }) => {
+            machine.reg[a] =
+                machine.stacks.get(&machine.reg[b]).expect(NULL_STACK_ERR)[machine.reg[c] as usize]
+        }
+        Amend(Pointers { a, b, c }) => {
+            machine
+                .stacks
+                .get_mut(&machine.reg[a])
+                .expect(NULL_STACK_ERR)[machine.reg[b] as usize] = machine.reg[c]
+        }
+        Add(Pointers { a, b, c }) => machine.reg[a] = machine.reg[b].wrapping_add(machine.reg[c]),
+        Mul(Pointers { a, b, c }) => machine.reg[a] = machine.reg[b].wrapping_mul(machine.reg[c]),
+        Div(Pointers { a, b, c }) => machine.reg[a] = machine.reg[b].wrapping_div(machine.reg[c]),
+        Nand(Pointers { a, b, c }) => machine.reg[a] = !(machine.reg[b] & machine.reg[c]),
+        Halt(_) => {
+            let splitter = b"UM program follows colon:";
+            let mut compare: Vec<u8> = Vec::new();
+            let mut session: Vec<u8> = Vec::new();
+            let mut program: Vec<u8> = Vec::new();
+            let mut split = false;
+            for b in machine.session {
+                if !split {
+                    if compare.len() == splitter.len() {
+                        compare.remove(0);
+                    }
+                    compare.push(b);
+                }
+                if split {
+                    program.push(b);
+                } else {
+                    session.push(b);
+                }
+                split = compare == splitter;
+            }
 
-fn operate(mut finger: usize, mut reg: [u32; 8], mut stacks: Stacks, instruction: Instruction) ->  (usize, [u32; 8], Stacks) {
-    match instruction {
-        Move(Pointers{a, b, c}) => reg[a] = if reg[c] > 0 {reg[b]} else {reg[a]},
-        Index(Pointers{a, b, c}) => reg[a] = stacks.get(&reg[b]).expect(NULL_STACK_ERR)[reg[c] as usize],
-        Amend(Pointers{a, b, c}) => stacks.get_mut(&reg[a]).expect(NULL_STACK_ERR).insert(reg[b] as usize, reg[c]),
-        Add(Pointers{a, b, c}) => reg[a] = reg[b].wrapping_add(reg[c]),
-        Mul(Pointers{a, b, c}) => reg[a] = reg[b].wrapping_mul(reg[c]),
-        Div(Pointers{a, b, c}) => reg[a] = reg[b] / reg[c],
-        Nand(Pointers{a, b, c}) => reg[a] = !(reg[b] & reg[c]),
-        Halt(_) => exit(0),
-        Allocate(Pointers{b, c, ..}) => reg[b]= insert_stack(&mut stacks, vec![0u32; reg[c] as usize]),
-        Abandon(Pointers{c, ..}) => {stacks.remove(&reg[c]);},
-        Out(Pointers{c, ..}) => print!("{}", reg[c] as u8 as char),
-        In(Pointers{c, ..}) => reg[c] = io::stdin().take(1).bytes().next().expect("No Input").expect("Invalid Input") as u32,
-        Load(Pointers{b, c, ..}) => {
-            stacks.insert(0, stacks.get(&reg[b]).expect(NULL_STACK_ERR).clone());
-            finger = reg[c] as usize;
+            if program.len() > 0 {
+                let mut pf = File::create("program.um").expect("Could not open program");
+                pf.write_all(&program).expect("Could not write program");
+            }
+            let mut sf = File::create("session.log").expect("Could not open log");
+            sf.write_all(&session).expect("Could not write log");
+            
+            exit(0)
         },
-        Ortho(OrthoPointers{a, value}) => reg[a] = value, 
+        Allocate(Pointers { b, c, .. }) => {
+            machine.reg[b] = machine.insert_stack(vec![0u32; machine.reg[c] as usize]);
+        }
+        Abandon(Pointers { c, .. }) => {
+            machine.stacks.remove(&machine.reg[c]);
+        }
+        Out(Pointers { c, .. }) => {
+            machine.session.push(machine.reg[c] as u8);
+            print!("{}", machine.reg[c] as u8 as char)
+        },
+        In(Pointers { c, .. }) => machine.reg[c] = read_byte(&mut machine),
+        Load(Pointers { b, c, .. }) => {
+            if machine.reg[b] > 0 {
+                machine.stacks.insert(
+                    0,
+                    machine
+                        .stacks
+                        .get(&machine.reg[b])
+                        .expect(NULL_STACK_ERR)
+                        .clone(),
+                );
+            }
+            machine.fin = machine.reg[c] as usize;
+        }
+        Ortho(OrthoPointers { a, value }) => machine.reg[a] = value,
     };
-    (finger, reg, stacks)
+    machine
 }
-
-
-
 
 #[cfg(test)]
 mod tests {
@@ -158,14 +251,8 @@ mod tests {
 
     #[test]
     fn test_instruction() {
-        let target = Instruction::Add(Pointers{
-            a: 7,
-            b: 6,
-            c: 0
-
-        });
+        let target = Instruction::Add(Pointers { a: 7, b: 6, c: 0 });
         let other: Instruction = 0b00110000000000000000000111110000.into();
         assert_eq!(target, other);
-        
     }
 }
