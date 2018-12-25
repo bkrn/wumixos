@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-use std::io::{self, Read, BufRead, BufReader, Write};
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::exit;
-use std::{thread, time};
-use std::fs::{File};
 
-type Stacks = HashMap<u32, Vec<u32>>;
+type Stacks = Vec<Vec<u32>>;
 
 #[derive(Debug, PartialEq)]
 struct Pointers {
@@ -58,12 +56,19 @@ enum Instruction {
 
 use self::Instruction::*;
 
+const SIG_EXPORT: &'static [u8; 25] = b"UM program follows colon:";
+
 struct Machine {
     fin: usize,
     reg: [u32; 8],
     stacks: Stacks,
-    buffer: Vec<u8>,
+    available: Vec<usize>,
+
+    input_buffer: Vec<u8>,
+
+    exporting: bool,
     session: Vec<u8>,
+    export: Vec<u8>,
 }
 
 impl Machine {
@@ -75,19 +80,31 @@ impl Machine {
 
     fn instruction(&self) -> Instruction {
         self.stacks
-            .get(&0)
+            .get(0)
             .map(|scroll| scroll[self.fin])
             .expect("Finger or stack invalid")
             .into()
     }
 
     fn insert_stack(&mut self, stack: Vec<u32>) -> u32 {
-        let mut key = 1;
-        while self.stacks.contains_key(&key) {
-            key = key + 1;
+        if let Some(key) = self.available.pop() {
+            self.stacks[key] = stack;
+            key as u32
+        } else {
+            let key = self.stacks.len();
+            self.stacks.push(stack);
+            key as u32
         }
-        self.stacks.insert(key, stack);
-        key
+    }
+
+    fn test_for_export(&mut self) {
+        if self.session.len() >= SIG_EXPORT.len() {
+            let (_, compare) = self.session.split_at(self.session.len() - SIG_EXPORT.len());
+            if compare == SIG_EXPORT {
+                self.exporting = true;
+                println!("\nCapturing all following output into './program.um'");
+            };
+        }
     }
 }
 
@@ -131,14 +148,15 @@ fn get_scroll() -> Vec<u32> {
 }
 
 fn main() {
-    let mut stacks: HashMap<u32, Vec<u32>> = HashMap::new();
-    stacks.insert(0, get_scroll());
     let mut machine = Machine {
         fin: 0,
         reg: [0; 8],
-        stacks: stacks,
-        buffer: Vec::new(),
+        stacks: vec![get_scroll()],
+        available: Vec::new(),
+        input_buffer: Vec::new(),
+        exporting: false,
         session: Vec::new(),
+        export: Vec::new(),
     };
     loop {
         machine = spin(machine);
@@ -150,17 +168,18 @@ static NULL_STACK_ERR: &'static str = "Attempted operation on unallocated stack"
 type Tty = BufReader<File>;
 
 fn open_tty() -> Tty {
-    let f = File::open("/dev/tty")
-        .expect("Could Not Open TTY");
+    let f = File::open("/dev/tty").expect("Could Not Open TTY");
     BufReader::new(f)
 }
 
 fn read_byte(machine: &mut Machine) -> u32 {
-    if machine.buffer.len() == 0 {
-        open_tty().read_until(10, &mut machine.buffer);
-        machine.buffer.reverse();
+    if machine.input_buffer.len() == 0 {
+        open_tty()
+            .read_until(10, &mut machine.input_buffer)
+            .expect("Read from TTY failed");
+        machine.input_buffer.reverse();
     }
-    machine.buffer.pop().expect("No input read") as u32
+    machine.input_buffer.pop().expect("No input read") as u32
 }
 
 fn spin(mut machine: Machine) -> Machine {
@@ -173,13 +192,15 @@ fn spin(mut machine: Machine) -> Machine {
             }
         }
         Index(Pointers { a, b, c }) => {
-            machine.reg[a] =
-                machine.stacks.get(&machine.reg[b]).expect(NULL_STACK_ERR)[machine.reg[c] as usize]
+            machine.reg[a] = machine
+                .stacks
+                .get(machine.reg[b] as usize)
+                .expect(NULL_STACK_ERR)[machine.reg[c] as usize]
         }
         Amend(Pointers { a, b, c }) => {
             machine
                 .stacks
-                .get_mut(&machine.reg[a])
+                .get_mut(machine.reg[a] as usize)
                 .expect(NULL_STACK_ERR)[machine.reg[b] as usize] = machine.reg[c]
         }
         Add(Pointers { a, b, c }) => machine.reg[a] = machine.reg[b].wrapping_add(machine.reg[c]),
@@ -187,56 +208,38 @@ fn spin(mut machine: Machine) -> Machine {
         Div(Pointers { a, b, c }) => machine.reg[a] = machine.reg[b].wrapping_div(machine.reg[c]),
         Nand(Pointers { a, b, c }) => machine.reg[a] = !(machine.reg[b] & machine.reg[c]),
         Halt(_) => {
-            let splitter = b"UM program follows colon:";
-            let mut compare: Vec<u8> = Vec::new();
-            let mut session: Vec<u8> = Vec::new();
-            let mut program: Vec<u8> = Vec::new();
-            let mut split = false;
-            for b in machine.session {
-                if !split {
-                    if compare.len() == splitter.len() {
-                        compare.remove(0);
-                    }
-                    compare.push(b);
-                }
-                if split {
-                    program.push(b);
-                } else {
-                    session.push(b);
-                }
-                split = compare == splitter;
-            }
-
-            if program.len() > 0 {
+            if machine.export.len() > 0 {
                 let mut pf = File::create("program.um").expect("Could not open program");
-                pf.write_all(&program).expect("Could not write program");
+                pf.write_all(&machine.export)
+                    .expect("Could not write program");
             }
             let mut sf = File::create("session.log").expect("Could not open log");
-            sf.write_all(&session).expect("Could not write log");
-            
-            exit(0)
-        },
+            sf.write_all(&machine.session).expect("Could not write log");
+            exit(0);
+        }
         Allocate(Pointers { b, c, .. }) => {
             machine.reg[b] = machine.insert_stack(vec![0u32; machine.reg[c] as usize]);
         }
         Abandon(Pointers { c, .. }) => {
-            machine.stacks.remove(&machine.reg[c]);
+            machine.available.push(machine.reg[c] as usize);
         }
         Out(Pointers { c, .. }) => {
-            machine.session.push(machine.reg[c] as u8);
-            print!("{}", machine.reg[c] as u8 as char)
-        },
+            if !machine.exporting {
+                machine.session.push(machine.reg[c] as u8);
+                print!("{}", machine.reg[c] as u8 as char);
+                machine.test_for_export();
+            } else {
+                machine.export.push(machine.reg[c] as u8);
+            }
+        }
         In(Pointers { c, .. }) => machine.reg[c] = read_byte(&mut machine),
         Load(Pointers { b, c, .. }) => {
             if machine.reg[b] > 0 {
-                machine.stacks.insert(
-                    0,
-                    machine
-                        .stacks
-                        .get(&machine.reg[b])
-                        .expect(NULL_STACK_ERR)
-                        .clone(),
-                );
+                machine.stacks[0] = machine
+                    .stacks
+                    .get(machine.reg[b] as usize)
+                    .expect(NULL_STACK_ERR)
+                    .clone();
             }
             machine.fin = machine.reg[c] as usize;
         }
