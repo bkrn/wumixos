@@ -5,5 +5,6 @@
 *.log
 a.out
 /code
+/utilities
 .vscode
 .DS_Store
