@@ -10,7 +10,7 @@ matrix:
   fast_finish: true
 cache: cargo
 before_install:
-  - ./install-cargo-web
+  - ./install-cargo-web.sh
 script:
   - cargo install cargo-web
   - cargo build --verbose --bin decrypt
