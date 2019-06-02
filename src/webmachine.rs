@@ -57,6 +57,7 @@ pub struct WebMachine {
 pub enum Request {
     BootFrom(String),
     Input(Vec<u32>),
+    Shutdown,
     Status,
 }
 
@@ -187,6 +188,11 @@ impl Agent for WebMachine {
                     self.media_fetcher =
                         Some(FetchService::new().fetch_binary(req, self.media_callback.clone()));
                 }
+            },
+            Request::Shutdown => {
+                self.cycles = 0;
+                self.buffer = Vec::new();
+                self.machine = None;
             }
         }
     }

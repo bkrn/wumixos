@@ -111,6 +111,14 @@ body {
     margin-right: 10px;
 }
 
+.power-button {
+    font-family: 'Days One', sans-serif;
+    height: 30px;
+    position: fixed;
+    top: 380px;
+    left: 915px;
+}
+
 /**
 *  counter.css  - written by Victor N - 22/Nov/2013 - www.vitim.us
 * Repo: https://github.com/victornpb/analog-counter-wheel

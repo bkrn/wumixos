@@ -69,6 +69,7 @@ enum Msg {
     SendText,
     UpdateText(String),
     FetchMedia(String),
+    Shutdown,
 }
 
 impl Component for Model {
@@ -173,6 +174,11 @@ impl Component for Model {
                 true
             }
             Msg::Ignore => false,
+            Msg::Shutdown => {
+                self.terminal = String::new();
+                self.machine.send(Request::Shutdown);
+                false
+            }
         }
     }
 }
@@ -235,6 +241,9 @@ impl Renderable<Model> for Model {
             <div class="led-box script",>
                 <div class={self.machine_state.class()},></div>
             </div>
+            <button class="power-button", onclick=|_| Msg::Shutdown,>
+                {"POWER"}
+            </button>
             <div class="container",>
                 
                 <div class="term-container",>

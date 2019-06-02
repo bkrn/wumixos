@@ -13,7 +13,7 @@ Download, verify, and decrypt UMIX OS
 Defaults to writing the binary to `./umix_os.um` but
 you can provide a different target file as an argument
 
-`cargo run --release --bin decrypt`
+`cargo run --release --bin decrypt --features "decrypt"`
 
 ## Launch umix OS in terminal
 
@@ -32,4 +32,4 @@ Passing in arguments to run on launch
 # built separately 
 cargo web build --bin machine --target wasm32-unknown-unknown --release --features "web" && \
 cp target/wasm32-unknown-unknown/release/machine.* static/machine && \
-cargo-web start --release --bin web --features "web"```
+cargo web start --release --bin web --features "web"```

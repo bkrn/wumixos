@@ -8,3 +8,4 @@ a.out
 /utilities
 .vscode
 .DS_Store
+/static/machine/*

@@ -16,3 +16,4 @@ script:
   - cargo build --verbose --bin decrypt --features "decrypt"
   - cargo web build --release --bin machine --features "web"
   - cargo web build --release --bin web --features "web"
+  - cargo test --verbose --all
