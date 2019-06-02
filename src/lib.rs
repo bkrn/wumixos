@@ -1,11 +1,6 @@
-// #[cfg(feature = "stdweb")]
-// #[macro_use]
-// extern crate stdweb;
-
-
 use std::sync::mpsc::{Receiver, Sender};
 
-#[cfg(feature = "yew")]
+#[cfg(feature = "web")]
 pub mod webmachine;
 
 type Stacks = Vec<Vec<u32>>;

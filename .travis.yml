@@ -12,8 +12,7 @@ cache: cargo
 before_install:
   - ./install-cargo-web.sh
 script:
-  - cargo install cargo-web
-  - cargo build --verbose --bin decrypt
   - cargo build --verbose --bin term
+  - cargo build --verbose --bin decrypt --features "decrypt"
   - cargo web build --release --bin machine --features "web"
-  - cargo web build --release --bin web --features "web
+  - cargo web build --release --bin web --features "web"

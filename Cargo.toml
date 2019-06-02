@@ -22,8 +22,8 @@ path = "src/bins/machine.rs"
 
 
 [dependencies]
-reqwest = {version = "0.9", optional = true, default-features = true}
-rust-crypto = {version = "0.2", optional = true, default-features = true}
+reqwest = {version = "0.9", optional = true, default-features = false}
+rust-crypto = {version = "0.2", optional = true, default-features = false}
 yew = {version = "0.6", optional = true, default-features = false}
 failure = {version = "0.1", optional = true, default-features = false}
 http = {version = "0.1", optional = true, default-features = false}
@@ -33,3 +33,4 @@ stdweb = {version = "0.4", optional = true,  default-features = false}
 
 [features]
 web = ["yew", "serde_derive", "serde", "http", "failure", "stdweb"]
+decrypt = ["reqwest", "rust-crypto"]

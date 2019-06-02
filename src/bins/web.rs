@@ -9,7 +9,6 @@ use cbv::webmachine::{Request, Response, WebMachine};
 
 use std::time::Duration;
 
-use serde_derive::{Deserialize, Serialize};
 
 use yew::services::{interval::IntervalTask, ConsoleService, IntervalService};
 use yew::{html, Component, ComponentLink, Html, Renderable, ShouldRender};
@@ -82,7 +81,7 @@ impl Component for Model {
         let ticker =
             IntervalService::new().spawn(Duration::from_millis(200), link.send_back(|_| Msg::Tick));
 
-        let callback = link.send_back(|d| Msg::Machine(d));
+        let callback = link.send_back(Msg::Machine);
         let machine = WebMachine::bridge(callback);
 
         Model {

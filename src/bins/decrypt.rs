@@ -2,7 +2,6 @@ use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::sync::mpsc::channel;
-use std::sync::{Mutex, Arc};
 use std::thread;
 
 use cbv::{spin, Machine};
