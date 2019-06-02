@@ -1,4 +1,3 @@
-use std::time;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use http::request::Request as HttpRequest;
