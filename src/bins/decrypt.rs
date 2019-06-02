@@ -30,7 +30,7 @@ fn codex() -> Vec<u8> {
 
 fn main() {
     let file_name = env::args()
-        .nth(2)
+        .nth(1)
         .unwrap_or_else(|| String::from("umix_os.um"));
     let mut export_file = File::create(&file_name).unwrap();
     let (client_sender, client_receiver) = channel();
