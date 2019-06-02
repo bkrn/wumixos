@@ -4,4 +4,29 @@ version = "0.1.0"
 authors = ["Aaron Di Silvestro <aaron@bkrn.org>"]
 edition = "2018"
 
+[[bin]]
+name = "term"
+path = "src/bins/term.rs"
+
+[[bin]]
+name = "decrypt"
+path = "src/bins/decrypt.rs"
+
+[[bin]]
+name = "web"
+path = "src/bins/web.rs"
+
+[[bin]]
+name = "machine"
+path = "src/bins/machine.rs"
+
+
 [dependencies]
+reqwest = {version = "0.9", optional = true, default-features = true}
+rust-crypto = {version = "0.2", optional = true, default-features = true}
+yew = {version = "0.6", optional = true, default-features = false}
+failure = {version = "0.1", optional = true, default-features = false}
+http = {version = "0.1", optional = true, default-features = false}
+serde = {version = "1.0", optional = true,  default-features = false}
+serde_derive = {version = "1.0", optional = true,  default-features = false}
+stdweb = {version = "0.4", optional = true,  default-features = false}

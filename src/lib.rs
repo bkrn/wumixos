@@ -1,6 +1,12 @@
-use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::process::exit;
+// #[cfg(feature = "stdweb")]
+// #[macro_use]
+// extern crate stdweb;
+
+
+use std::sync::mpsc::{Receiver, Sender};
+
+#[cfg(feature = "yew")]
+pub mod webmachine;
 
 type Stacks = Vec<Vec<u32>>;
 
@@ -56,25 +62,25 @@ enum Instruction {
 
 use self::Instruction::*;
 
-const SIG_EXPORT: &'static [u8; 25] = b"UM program follows colon:";
-
-struct Machine {
+pub struct Machine {
     fin: usize,
     reg: [u32; 8],
     stacks: Stacks,
     available: Vec<usize>,
 
-    input_buffer: Vec<u8>,
-
-    exporting: bool,
-    session: Vec<u8>,
-    export: Vec<u8>,
+    inbox: Receiver<u32>,
+    outbox: Sender<u32>,
 }
 
 impl Machine {
+
+    pub fn finger(&self) -> usize {
+        self.fin
+    }
+
     fn advance(&mut self) -> Instruction {
         let instruction = self.instruction();
-        self.fin = self.fin + 1;
+        self.fin += 1;
         instruction
     }
 
@@ -86,24 +92,25 @@ impl Machine {
             .into()
     }
 
-    fn insert_stack(&mut self, stack: Vec<u32>) -> u32 {
+    fn insert_stack(&mut self, stack_length: usize) -> u32 {
         if let Some(key) = self.available.pop() {
-            self.stacks[key] = stack;
+            self.stacks[key] = vec![0; stack_length];
             key as u32
         } else {
             let key = self.stacks.len();
-            self.stacks.push(stack);
+            self.stacks.push(vec![0; stack_length]);
             key as u32
         }
     }
 
-    fn test_for_export(&mut self) {
-        if self.session.len() >= SIG_EXPORT.len() {
-            let (_, compare) = self.session.split_at(self.session.len() - SIG_EXPORT.len());
-            if compare == SIG_EXPORT {
-                self.exporting = true;
-                println!("\nCapturing all following output into './program.um'");
-            };
+    pub fn new(r: Receiver<u32>, s: Sender<u32>, scroll: &mut std::io::Read) -> Self {
+        Self {
+            fin: 0,
+            reg: [0; 8],
+            stacks: vec![read_scroll(scroll)],
+            available: Vec::new(),
+            inbox: r,
+            outbox: s,
         }
     }
 }
@@ -133,56 +140,32 @@ impl From<u32> for Instruction {
 fn as_u32(word: [u8; 4]) -> u32 {
     word.iter()
         .enumerate()
-        .map(|(i, b)| (*b as u32) << ((3 - i) * 8))
+        .map(|(i, b)| u32::from(*b) << ((3 - i) * 8))
         .sum()
 }
 
-fn get_scroll() -> Vec<u32> {
+fn read_scroll(r: &mut std::io::Read) -> Vec<u32> {
     let mut scroll: Vec<u32> = Vec::new();
-    let mut stdin = io::stdin();
     let mut word: [u8; 4] = [0; 4];
-    while let Ok(_) = stdin.read_exact(&mut word) {
+    while let Ok(_) = r.read_exact(&mut word) {
         scroll.push(as_u32(word));
     }
     scroll
 }
 
-fn main() {
-    let mut machine = Machine {
-        fin: 0,
-        reg: [0; 8],
-        stacks: vec![get_scroll()],
-        available: Vec::new(),
-        input_buffer: Vec::new(),
-        exporting: false,
-        session: Vec::new(),
-        export: Vec::new(),
-    };
-    loop {
-        machine = spin(machine);
-    }
-}
-
 static NULL_STACK_ERR: &'static str = "Attempted operation on unallocated stack";
 
-type Tty = BufReader<File>;
-
-fn open_tty() -> Tty {
-    let f = File::open("/dev/tty").expect("Could Not Open TTY");
-    BufReader::new(f)
+#[cfg(feature = "yew")]
+fn read_byte(machine: &mut Machine) -> Option<u32> {
+    machine.inbox.try_recv().ok()
 }
 
-fn read_byte(machine: &mut Machine) -> u32 {
-    if machine.input_buffer.len() == 0 {
-        open_tty()
-            .read_until(10, &mut machine.input_buffer)
-            .expect("Read from TTY failed");
-        machine.input_buffer.reverse();
-    }
-    machine.input_buffer.pop().expect("No input read") as u32
+#[cfg(not(feature = "yew"))]
+fn read_byte(machine: &mut Machine) -> Option<u32> {
+    Some(machine.inbox.recv().unwrap())
 }
 
-fn spin(mut machine: Machine) -> Machine {
+pub fn spin(mut machine: Machine) -> Option<Machine> {
     match machine.advance() {
         Move(Pointers { a, b, c }) => {
             machine.reg[a] = if machine.reg[c] > 0 {
@@ -208,31 +191,24 @@ fn spin(mut machine: Machine) -> Machine {
         Div(Pointers { a, b, c }) => machine.reg[a] = machine.reg[b].wrapping_div(machine.reg[c]),
         Nand(Pointers { a, b, c }) => machine.reg[a] = !(machine.reg[b] & machine.reg[c]),
         Halt(_) => {
-            if machine.export.len() > 0 {
-                let mut pf = File::create("program.um").expect("Could not open program");
-                pf.write_all(&machine.export)
-                    .expect("Could not write program");
-            }
-            let mut sf = File::create("session.log").expect("Could not open log");
-            sf.write_all(&machine.session).expect("Could not write log");
-            exit(0);
+            return None;
         }
         Allocate(Pointers { b, c, .. }) => {
-            machine.reg[b] = machine.insert_stack(vec![0u32; machine.reg[c] as usize]);
+            machine.reg[b] = machine.insert_stack(machine.reg[c] as usize);
         }
         Abandon(Pointers { c, .. }) => {
             machine.available.push(machine.reg[c] as usize);
         }
         Out(Pointers { c, .. }) => {
-            if !machine.exporting {
-                machine.session.push(machine.reg[c] as u8);
-                print!("{}", machine.reg[c] as u8 as char);
-                machine.test_for_export();
-            } else {
-                machine.export.push(machine.reg[c] as u8);
-            }
+            machine.outbox.send(machine.reg[c]).expect("Output channel closed")
         }
-        In(Pointers { c, .. }) => machine.reg[c] = read_byte(&mut machine),
+        In(Pointers { c, .. }) => {
+            if let Some(b) = read_byte(&mut machine) {
+                machine.reg[c] = b;
+            } else {
+                machine.fin -= 1;
+            }
+        },
         Load(Pointers { b, c, .. }) => {
             if machine.reg[b] > 0 {
                 machine.stacks[0] = machine
@@ -245,7 +221,7 @@ fn spin(mut machine: Machine) -> Machine {
         }
         Ortho(OrthoPointers { a, value }) => machine.reg[a] = value,
     };
-    machine
+    Some(machine)
 }
 
 #[cfg(test)]
@@ -255,7 +231,7 @@ mod tests {
     #[test]
     fn test_instruction() {
         let target = Instruction::Add(Pointers { a: 7, b: 6, c: 0 });
-        let other: Instruction = 0b00110000000000000000000111110000.into();
+        let other: Instruction = 0b0011_0000_0000_0000_0000_0001_1111_0000.into();
         assert_eq!(target, other);
     }
 }

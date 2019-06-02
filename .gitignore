@@ -4,3 +4,6 @@
 *.um
 *.log
 a.out
+/code
+.vscode
+.DS_Store

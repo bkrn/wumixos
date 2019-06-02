@@ -1,0 +1,10 @@
+;                         user          password
+(define users (list (cons "ftd"         "falderal90")
+                    (cons "knr"         ())
+                    (cons "guest"       "")
+                    (cons "gardener"    ())
+                    (cons "ohmega"      "bidirectional")
+                    (cons "yang"        ())
+                    (cons "howie"       "xyzzy")
+                    (cons "hmonk"       "COMEFROM")
+                    (cons "bbarker"     ())))
