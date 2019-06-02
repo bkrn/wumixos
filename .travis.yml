@@ -1,0 +1,19 @@
+if: branch = master
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
+cache: cargo
+before_install:
+  - ./install-cargo-web
+script:
+  - cargo install cargo-web
+  - cargo build --verbose --bin decrypt
+  - cargo build --verbose --bin term
+  - cargo web build --release --bin machine --features "web"
+  - cargo web build --release --bin web --features "web
