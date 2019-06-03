@@ -1,6 +1,10 @@
 [![Build Status](https://travis-ci.org/bkrn/wumixos.svg?branch=master)](https://travis-ci.org/bkrn/wumixos)
+[![codecov](https://codecov.io/gh/bkrn/wumixos/branch/master/graph/badge.svg)](https://codecov.io/gh/bkrn/wumixos)
+
 
 # README
+
+*code coverage is VM only*
 
 ## Sandmark
 

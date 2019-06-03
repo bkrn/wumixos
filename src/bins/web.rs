@@ -9,9 +9,14 @@ use cbv::webmachine::{Request, Response, WebMachine};
 
 use std::time::Duration;
 
+use serde_derive::{Deserialize, Serialize};
 
-use yew::services::{interval::IntervalTask, ConsoleService, IntervalService};
-use yew::{html, Component, ComponentLink, Html, Renderable, ShouldRender};
+use yew::format::Json;
+use yew::services::reader::{File, FileChunk, FileData, ReaderService, ReaderTask};
+use yew::services::{
+    interval::IntervalTask, storage::Area, ConsoleService, IntervalService, StorageService,
+};
+use yew::{html, ChangeData, Component, ComponentLink, Html, Renderable, ShouldRender};
 
 use yew::worker::*;
 
@@ -41,7 +46,16 @@ struct BootMedia {
     selected: bool,
 }
 
+#[derive(Deserialize, Serialize)]
+struct ScriptMedia {
+    data: Vec<u8>,
+    name: String,
+    selected: bool,
+}
+
+
 struct Model {
+    link: ComponentLink<Model>,
     machine: Box<Bridge<WebMachine>>,
     ticker: IntervalTask,
     terminal: String,
@@ -52,7 +66,11 @@ struct Model {
     finger: usize,
     text: String,
     boot_media: Vec<BootMedia>,
+    script_media: Vec<ScriptMedia>,
     have_written: bool,
+    reader: ReaderService,
+    read_tasks: Vec<ReaderTask>,
+    local_storage: StorageService,
 }
 
 impl Model {
@@ -70,6 +88,9 @@ enum Msg {
     UpdateText(String),
     FetchMedia(String),
     Shutdown,
+    Script(Vec<File>),
+    Loaded(FileData),
+    ScriptMedia(Vec<u8>),
 }
 
 impl Component for Model {
@@ -84,8 +105,22 @@ impl Component for Model {
 
         let callback = link.send_back(Msg::Machine);
         let machine = WebMachine::bridge(callback);
+        let mut local_storage = StorageService::new(Area::Local);
+
+        let scripts: Vec<ScriptMedia> = local_storage
+            .restore::<Result<String, failure::Error>>("scripts")
+            .ok()
+            .map(|s| -> serde_json::Value {serde_json::from_str(&s).unwrap()})
+            .map(|s| {
+                if let serde_json::Value::String(s) = s {
+                    serde_json::from_str(&s).unwrap()
+                } else {
+                    Vec::new()
+                }
+            }).unwrap();
 
         Model {
+            link,
             machine,
             ticker,
             terminal: String::new(),
@@ -96,6 +131,10 @@ impl Component for Model {
             finger: 0,
             text: String::new(),
             have_written: false,
+            read_tasks: Vec::new(),
+            reader: ReaderService::new(),
+            script_media: scripts,
+            local_storage,
             boot_media: vec![
                 BootMedia {
                     url: "/media/umix_os.um".into(),
@@ -133,7 +172,7 @@ impl Component for Model {
             Msg::Tick => {
                 self.machine.send(Request::Status);
                 if self.have_written {
-                    js!{
+                    js! {
                         let objDiv = document.getElementById("terminal");
                         console.log(objDiv);
                         objDiv.scrollTop = objDiv.scrollHeight;
@@ -177,6 +216,33 @@ impl Component for Model {
             Msg::Shutdown => {
                 self.terminal = String::new();
                 self.machine.send(Request::Shutdown);
+                false
+            }
+            Msg::Script(files) => {
+                for file in files.into_iter() {
+                    let task = {
+                        let callback = self.link.send_back(Msg::Loaded);
+                        self.reader.read_file(file, callback)
+                    };
+                    self.read_tasks.push(task);
+                }
+                false
+            }
+            Msg::Loaded(file) => {
+                self.script_media.push(ScriptMedia {
+                    name: file.name,
+                    data: file.content,
+                    selected: false,
+                });
+                if let Ok(s) = serde_json::to_string(&self.script_media) {
+                    self.local_storage
+                        .store("scripts", Json(&s));
+                }
+                true
+            }
+            Msg::ScriptMedia(a) => {
+                self.machine
+                    .send(Request::Input(a.into_iter().map(u32::from).collect()));
                 false
             }
         }
@@ -230,7 +296,13 @@ impl Renderable<Model> for Model {
         let media_view = move |media: &BootMedia| -> Html<Self> {
             let url = media.url.clone();
             html!(
-                <div class="floppy red", onclick=|_| Msg::FetchMedia(url.clone()), >{media.name.clone()}</div>
+                <li><div class="floppy red", onclick=|_| Msg::FetchMedia(url.clone()), >{media.name.clone()}</div></li>
+            )
+        };
+        let script_view = move |media: &ScriptMedia| -> Html<Self> {
+            let data = media.data.clone();
+            html!(
+                <li><div class="floppy red", onclick=|_| Msg::ScriptMedia(data.clone()), >{media.name.clone()}</div></li>
             )
         };
         html! {
@@ -245,17 +317,16 @@ impl Renderable<Model> for Model {
                 {"POWER"}
             </button>
             <div class="container",>
-                
                 <div class="term-container",>
                     <pre class="term-box",>< pre class="terminal", id="terminal", > {&self.terminal} </pre></pre>
                 </div>
                 <div class="machine-container",>
                     <input class="term-input",
-                            type="text", 
-                            value=&self.text, 
-                            oninput=|input| Msg::UpdateText(input.value), 
+                            type="text",
+                            value=&self.text,
+                            oninput=|input| Msg::UpdateText(input.value),
                             onkeyup=|ev| if ev.key() == "Enter" {Msg::SendText} else {Msg::Ignore},></input>
-                    
+
                     <div class="indicator",>
                         <h4>{"CYCLES PER 100mS"}</h4>
                         { digit_counter(self.clock) }
@@ -270,11 +341,24 @@ impl Renderable<Model> for Model {
                     </div>
                 </div>
                 <div class="storage-container",>
-                    <h4>{"MEDIA"}</h4>
-                    {for self.boot_media.iter().map(media_view)}
+                    <h4>{"BOOT MEDIA"}</h4>
+                    <ul class="shelf",>
+                        {for self.boot_media.iter().map(media_view)}
+                    </ul>
+
+                    <h4>{"SCRIPT MEDIA"}</h4>
+                    <ul class="shelf",>
+                        {for self.script_media.iter().map(script_view)}
+                    </ul>
+                    <input type="file", multiple=false, onchange=|value| {
+                            let mut result = Vec::new();
+                            if let ChangeData::Files(files) = value {
+                                result.extend(files);
+                            }
+                            Msg::Script(result)
+                    },/>
                 </div>
             </div>
-            //<div class="background",/>
             </>
         }
     }

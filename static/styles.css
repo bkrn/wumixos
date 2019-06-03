@@ -12,17 +12,30 @@ body {
     display: block;
 }
 
-/* .background {
-    position: absolute;
-    background-position: left;
-    background-size: 600 600;
-    background-image: url("dec.png");
-    
-    top: 0px;
-    left: 0px;
-    bottom: 0px;
-    right: 0px;
-} */
+.shelf {
+    background-image: url(shelf.png);
+    background-size: contain;
+    background-position-y: bottom;
+    background-repeat: no-repeat;
+    height: 290px;
+    overflow-y: hidden;
+    overflow-x: auto;
+}
+
+.shelf li {
+    display: inline-block;
+    width: 150px;
+    height: 150px;
+    margin-right: 50px;
+}
+
+.shelf li:hover {
+    -moz-transform: translate(0, -12px);
+    -webkit-transform: translate(0, -12px);
+    -o-transform: translate(0, -12px);
+    -ms-transform: translate(0, -12px);
+    transform: translate(0, -12px);
+}
 
 .floppy {
     background-position: left;
@@ -32,6 +45,7 @@ body {
     height: 150px;
     padding: 15px;
     margin: 15px;
+    display: inline-block;
 }
 
 .floppy.red {
@@ -44,7 +58,7 @@ body {
 
 .container {
     display: grid;
-    grid-template-columns: 658px auto 250px;
+    grid-template-columns: 658px 650px auto;
     grid-template-rows: 50px 400px auto 25px;
 }
 
@@ -69,7 +83,7 @@ body {
     grid-column-start: 3;
     grid-column-end: 4;
     grid-row-start: 1;
-    grid-row-end: 3;
+    grid-row-end: 4;
     overflow-x: hidden;
     overflow-y: auto;
 }
@@ -96,6 +110,10 @@ body {
     font-size: large;
     scroll-behavior: smooth;
     margin: 0px;
+}
+
+button {
+    font-family: 'Days One', sans-serif;
 }
 
 .indicator {
