@@ -113,10 +113,11 @@ body {
 
 .power-button {
     font-family: 'Days One', sans-serif;
-    height: 30px;
+    height: 35px;
+    padding: 2px;
     position: fixed;
-    top: 380px;
-    left: 915px;
+    top: 455px;
+    left:1165px;
 }
 
 /**
