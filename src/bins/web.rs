@@ -12,9 +12,9 @@ use std::time::Duration;
 use serde_derive::{Deserialize, Serialize};
 
 use yew::format::Json;
-use yew::services::reader::{File, FileChunk, FileData, ReaderService, ReaderTask};
+use yew::services::reader::{File, FileData, ReaderService, ReaderTask};
 use yew::services::{
-    interval::IntervalTask, storage::Area, ConsoleService, IntervalService, StorageService,
+    interval::IntervalTask, storage::Area, ConsoleService, IntervalService, StorageService, DialogService
 };
 use yew::{html, ChangeData, Component, ComponentLink, Html, Renderable, ShouldRender};
 
@@ -78,6 +78,13 @@ impl Model {
         self.terminal += s;
         self.have_written = !s.is_empty();
     }
+
+    fn save_scripts(&mut self) {
+        if let Ok(s) = serde_json::to_string(&self.script_media) {
+            self.local_storage
+                .store("scripts", Json(&s));
+        }
+    }
 }
 
 enum Msg {
@@ -91,6 +98,7 @@ enum Msg {
     Script(Vec<File>),
     Loaded(FileData),
     ScriptMedia(Vec<u8>),
+    RemoveScript(String),
 }
 
 impl Component for Model {
@@ -153,6 +161,13 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::RemoveScript(s) => {
+                if DialogService::new().confirm(&format!("Delete {}?", s)) {
+                    self.script_media.retain(|m| m.name != s);
+                    self.save_scripts();
+                }
+                true
+            }
             Msg::UpdateText(s) => {
                 self.text = s;
                 true
@@ -301,8 +316,16 @@ impl Renderable<Model> for Model {
         };
         let script_view = move |media: &ScriptMedia| -> Html<Self> {
             let data = media.data.clone();
+            let name = media.name.clone();
             html!(
-                <li><div class="floppy red", onclick=|_| Msg::ScriptMedia(data.clone()), >{media.name.clone()}</div></li>
+                <li>
+                    
+                    <div class="floppy black", onclick=|_| Msg::ScriptMedia(data.clone()), >
+                        {media.name.clone()}
+                    </div>   
+                    <div class="trash", onclick=|_| Msg::RemoveScript(name.clone()), >
+                    </div> 
+                </li>
             )
         };
         html! {

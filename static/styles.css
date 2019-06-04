@@ -8,18 +8,19 @@ body {
 }
 
 .term-input {
-    width: 82ch;
+    width: 655px;
     display: block;
 }
 
 .shelf {
     background-image: url(shelf.png);
-    background-size: contain;
+    background-size: 100% 100px;
     background-position-y: bottom;
     background-repeat: no-repeat;
     height: 290px;
+    overflow-x: scroll;
     overflow-y: hidden;
-    overflow-x: auto;
+    white-space: nowrap;
 }
 
 .shelf li {
@@ -37,7 +38,20 @@ body {
     transform: translate(0, -12px);
 }
 
+.trash {
+    filter: invert(100%);
+    /* position: relative; */
+    width: 40px;
+    height: 40px;
+    background-image: url("delete-forever.svg");
+    background-repeat: no-repeat;
+    background-size: contain;
+    margin-top: -55px;
+    margin-left: 155px;
+}
+
 .floppy {
+    /* position: absolute; */
     background-position: left;
     background-repeat: no-repeat;
     background-size: contain;
@@ -59,7 +73,7 @@ body {
 .container {
     display: grid;
     grid-template-columns: 658px 650px auto;
-    grid-template-rows: 50px 400px auto 25px;
+    grid-template-rows: 15px 400px auto 25px;
 }
 
 .term-container {
@@ -89,8 +103,8 @@ body {
 }
 
 .term-box {
-    height: 50ch;
-    width: 82ch;
+    height: 400px;
+    width: 655px;
     overflow: hidden;
     border-radius: 30px;
     font-size: large;
@@ -99,8 +113,8 @@ body {
 }
 
 .terminal {
-    height: 48ch;
-    width: 80ch;
+    height: 382px;
+    width: 640px;
     overflow-x: hidden;
     overflow-y: auto;
     background-color: rgba(0,0,0,0.45);
@@ -111,6 +125,7 @@ body {
     scroll-behavior: smooth;
     margin: 0px;
 }
+
 
 button {
     font-family: 'Days One', sans-serif;
@@ -133,9 +148,9 @@ button {
     font-family: 'Days One', sans-serif;
     height: 35px;
     padding: 2px;
-    position: fixed;
-    top: 455px;
-    left:1165px;
+    position: relative;
+    top: 435px;
+    left:1145px;
 }
 
 /**
@@ -193,7 +208,7 @@ button {
 .led-box {
     height: 30px;
     padding: 10px;
-    position: fixed;
+    position: absolute;
 }
 
 .led-box.boot {
