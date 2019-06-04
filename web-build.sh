@@ -25,6 +25,6 @@ if [ "${1}" = "run" ]; then
     cargo-web start --release --bin web --features "web"
 else
     cargo-web build --release --bin web --features "web"
-    cp target/wasm32-unknown-unknown/release/web.js static/machine
-    cp target/wasm32-unknown-unknown/release/web.wasm static/machine
+    cp target/wasm32-unknown-unknown/release/web.js static
+    cp target/wasm32-unknown-unknown/release/web.wasm static
 fi
