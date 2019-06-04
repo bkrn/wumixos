@@ -118,14 +118,14 @@ impl Component for Model {
         let scripts: Vec<ScriptMedia> = local_storage
             .restore::<Result<String, failure::Error>>("scripts")
             .ok()
-            .map(|s| -> serde_json::Value {serde_json::from_str(&s).unwrap()})
-            .map(|s| {
+            .and_then(|s| -> Option<serde_json::Value> {serde_json::from_str(&s).ok()})
+            .and_then(|s| {
                 if let serde_json::Value::String(s) = s {
-                    serde_json::from_str(&s).unwrap()
+                    serde_json::from_str(&s).ok()
                 } else {
-                    Vec::new()
+                    Some(Vec::new())
                 }
-            }).unwrap();
+            }).unwrap_or_default();
 
         Model {
             link,
