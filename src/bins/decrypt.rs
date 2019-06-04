@@ -1,5 +1,6 @@
 use std::env;
 use std::fs::File;
+use std::path::Path;
 use std::io::Write;
 use std::sync::mpsc::channel;
 use std::thread;
@@ -32,6 +33,11 @@ fn main() {
     let file_name = env::args()
         .nth(1)
         .unwrap_or_else(|| String::from("umix_os.um"));
+
+    if let Some(p) = Path::new(&file_name).parent() {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    
     let mut export_file = File::create(&file_name).unwrap();
     let (client_sender, client_receiver) = channel();
     let (machine_sender, machine_receiver) = channel();

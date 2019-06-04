@@ -1,6 +1,7 @@
 #! /usr/bin/env sh
 set -e
 
+# mkdir -p "static/media"
 # Fetch, checksum, and decrypt UMIX OS if necessary
 if [ ! -f "static/media/umix_os.um" ]; then
     cargo run --release --bin decrypt --features "decrypt" -- "static/media/umix_os.um"
