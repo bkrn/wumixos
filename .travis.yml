@@ -35,6 +35,13 @@ script:
   - cargo web build --release --bin machine --features "web"
   - cargo web build --release --bin web --features "web"
   - cargo test --verbose --all --all-features
+  - ./web-build.sh
+
+deploy:
+  provider: surge
+  project: ./static/
+  domain: example.surge.sh  
+  skip_cleanup: true
 
 after_success: |
   if [[ "$TRAVIS_OS_NAME" == "linux" && "$TRAVIS_RUST_VERSION" == "stable" ]]; then
