@@ -15,9 +15,10 @@ fi
 
 # Build the VM WASM and js wrapper and move to the static
 # files directory
+mkdir -p static/machine
 cargo web build --release --bin machine --features "web"
-cp target/wasm32-unknown-unknown/release/machine.js static/machine
-cp target/wasm32-unknown-unknown/release/machine.wasm static/machine
+cp target/wasm32-unknown-unknown/release/machine.js static/machine/machine.js
+cp target/wasm32-unknown-unknown/release/machine.wasm static/machine/machine.wasm
 
 # Either burn a development server or build and move the
 # view WASM depending on the first argument being "run"

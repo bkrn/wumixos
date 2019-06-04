@@ -8,4 +8,7 @@ a.out
 /utilities
 .vscode
 .DS_Store
+/static/media/*
 /static/machine/*
+/static/web.js
+/static/web.wasm
