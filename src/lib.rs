@@ -89,7 +89,8 @@ impl Machine {
 
     fn insert_stack(&mut self, stack_length: usize) -> u32 {
         if let Some(key) = self.available.pop() {
-            self.stacks[key] = vec![0; stack_length];
+            self.stacks[key].clear();
+            self.stacks[key].resize(stack_length, 0);
             key as u32
         } else {
             let key = self.stacks.len();
@@ -223,10 +224,41 @@ pub fn spin(mut machine: Machine) -> Option<Machine> {
 mod tests {
     use super::*;
 
+    use std::sync::mpsc::channel;
+    use std::thread;
+
     #[test]
     fn test_instruction() {
         let target = Instruction::Add(Pointers { a: 7, b: 6, c: 0 });
         let other: Instruction = 0b0011_0000_0000_0000_0000_0001_1111_0000.into();
         assert_eq!(target, other);
+    }
+
+    #[test]
+    fn sandmark() {
+        let sand_mark = include_bytes!("../static/media/sandmark.umz");
+        let (client_sender, client_receiver) = channel();
+        let (machine_sender, machine_receiver) = channel();
+        let mut machine = Machine::new(machine_receiver, client_sender, &mut sand_mark.as_ref());
+
+        thread::spawn(move || {
+            while let Some(m) = spin(machine) {
+                machine = m
+            }
+        });
+
+        let mut output = String::new();
+        while let Ok(i) = client_receiver.recv() {
+            output.push(i as u8 as char);
+            if output.ends_with("loadprog ok.") {
+                println!("{}", output);
+                return
+            }
+        }
+
+        panic!(
+            "Failed with\n{}",
+            output
+        )    
     }
 }
